@@ -250,7 +250,7 @@ int main(int argc, char *argv[]) {
 out:
 	gettimeofday(&t_end, NULL);
 
-	printf("%dS and %d uS\n", t_end.tv_sec - t_start.tv_sec, t_end.tv_usec-t_start.tv_usec);
+	printf("%fms\n", ((t_end.tv_sec - t_start.tv_sec)*1000*1000 + t_end.tv_usec-t_start.tv_usec) / 1000.0);
 
 	return 0;
 }
