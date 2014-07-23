@@ -23,13 +23,24 @@ public:
 	void* get() {
 		return buffer;
 	}
+	void setMaxSize(size_t size){
+		maxSize = size;
+	}
+	void setSize(size_t size){
+		if(size > maxSize){
+			throw std::runtime_error("Buffer size is to larger!");
+		}
+		this->size = size;
+	}
 
 	size_t size;
 private:
 	Buffer(void* buffer, size_t size) :
 			buffer(buffer), size(size) {
+		maxSize = size;
 	}
 
+	size_t maxSize;
 	void* buffer;
 };
 

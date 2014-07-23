@@ -64,6 +64,9 @@ int main(void) {
 		printf("The device '%s' has %d port(s)\n",
 				ibv_get_device_name(ctx->device), device_attr.phys_port_cnt);
 
+		printf("The device '%s' max mr size is %d\n",
+						ibv_get_device_name(ctx->device), device_attr.max_mr_size);
+
 		rc = ibv_close_device(ctx);
 		if (rc) {
 			fprintf(stderr, "Error, failed to close the device '%s'\n",

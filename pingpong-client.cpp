@@ -18,8 +18,8 @@ int main(int argc, char* argv[]) {
 
 	char* hostip = argv[1];
 	char* port = argv[2];
-	int maxPacketSize = atoi(argv[3]);
-	int packetSize = 1;
+	int maxPacketNum = atoi(argv[3]);
+	int packetNum = 1;
 
 	timeval t_start;
 	timeval t_end;
@@ -28,35 +28,36 @@ int main(int argc, char* argv[]) {
 
 	int t_usec;
 
-	cout << "ID" << '\t' << "Size" << '\t' << "Latency(ms)" << endl;
-	while (packetSize < maxPacketSize) {
+	cout << "ID" << '\t' << "Size(k)" << '\t' << "Time(ms)" << endl;
+
+	rdma::ClientSocket *clientSocket = new rdma::ClientSocket(hostip, port,
+			1024, 1024);
+	rdma::Buffer sendPacket = clientSocket->getWriteBuffer();
+	while (packetNum <= maxPacketNum) {
 		try {
-
 			gettimeofday(&t_start, NULL);
-			rdma::ClientSocket clientSocket(hostip, port, packetSize, 1);
-			rdma::Buffer sendPacket = clientSocket.getWriteBuffer();
-			memset(sendPacket.get(), 0xfe, sendPacket.size);
-			clientSocket.write(sendPacket);
-
-			rdma::Buffer readPacket = clientSocket.read();
-
+			for (int i = 0; i < packetNum; i++) {
+				memset(sendPacket.get(), 0xfe, sendPacket.size);
+				clientSocket->write(sendPacket);
+				rdma::Buffer readPacket = clientSocket->read();
+				clientSocket->returnReadBuffer(readPacket);
+			}
 			gettimeofday(&t_end, NULL);
 
 			t_usec = (t_end.tv_sec - t_start.tv_sec) * 1000 * 1000
 					+ (t_end.tv_usec - t_start.tv_usec);
-
-			cout << id_num << '\t' << readPacket.size << '\t' << t_usec / 1000
-					<< '.' << t_usec % 1000 << endl;
-
+			cout << id_num << '\t' << packetNum << '\t' << t_usec / 1000.0
+					<< endl;
 			usleep(10000);
-
-			packetSize *= 2;
+			packetNum++;
 			id_num++;
 		} catch (std::exception& e) {
 			cerr << "Exception: " << e.what() << endl;
 		}
-
 	}
+
+	delete clientSocket;
+
 	return 0;
 }
 
