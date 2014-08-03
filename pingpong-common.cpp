@@ -21,8 +21,12 @@ void query_device() {
 		throw std::runtime_error("ibv_query_device failed!");
 	}
 
-	printf("There are %d devices!\n",device_num);
+	printf("The device '%s' max mr size is %u bytes. around %lf GBytes.\n",
+			ibv_get_device_name(ctx->device), device_attr.max_mr_size,
+			(long long)device_attr.max_mr_size / (1024.0 * 1024 * 1024));
 
-	ibv_close_device (ctx);
-	ibv_free_device_list (device_list);
+	printf("There are %d devices!\n", device_num);
+
+	ibv_close_device(ctx);
+	ibv_free_device_list(device_list);
 }

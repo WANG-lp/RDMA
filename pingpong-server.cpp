@@ -49,11 +49,13 @@ int main(int argc, char* argv[]) {
 
 	char* hostip = argv[1];
 	char* port = argv[2];
+	pdata rep_pdata;
 
 	rdma_event_channel *cm_channel;
 	rdma_cm_id *listen_id;
 	rdma_cm_event *event;
 	rdma_cm_id *cm_id;
+	rdma_conn_param conn_param = { };
 
 	ibv_pd *pd;
 	ibv_comp_channel *comp_chan;
@@ -67,6 +69,7 @@ int main(int argc, char* argv[]) {
 	ibv_recv_wr recv_wr = { };
 	ibv_recv_wr *bad_recv_wr;
 	ibv_wc wc;
+	void *cq_context;
 
 	sockaddr_in sin;
 
@@ -84,7 +87,7 @@ int main(int argc, char* argv[]) {
 			throw std::runtime_error("rdma_create_event_channel failed!");
 		}
 
-		if (!rdma_create_id(cm_channel, &listen_id, NULL, RDMA_PS_TCP)) {
+		if (rdma_create_id(cm_channel, &listen_id, NULL, RDMA_PS_TCP)) {
 			throw std::runtime_error("rdma_create_id failed!");
 		}
 
@@ -92,23 +95,21 @@ int main(int argc, char* argv[]) {
 		sin.sin_port = htons(atoi(port));
 		sin.sin_addr.s_addr = INADDR_ANY;
 
-		if (!rdma_bind_addr(listen_id, (struct sockaddr *) &sin)) {
+		if (rdma_bind_addr(listen_id, (struct sockaddr *) &sin)) {
 			throw std::runtime_error("rdma_bind_addr failed!");
 		}
 
-		if (!rdma_listen(listen_id, 1)) {
+		if (rdma_listen(listen_id, 1)) {
 			throw std::runtime_error("rdma_listen failed!");
 		}
 
-		if (!rdma_get_cm_event(cm_channel, &event)) {
+		if (rdma_get_cm_event(cm_channel, &event)) {
 			throw std::runtime_error("rdma_get_cm_event failed!");
 		}
 
 		if (event->event != RDMA_CM_EVENT_CONNECT_REQUEST) {
-			throw std::runtime_error("event failed!");
+			throw std::runtime_error("RDMA_CM_EVENT_CONNECT_REQUEST failed!");
 		}
-
-		rdma_ack_cm_event(event);
 
 		cm_id = event->id;
 
@@ -149,13 +150,58 @@ int main(int argc, char* argv[]) {
 
 		qp_attr.qp_type = IBV_QPT_RC;
 
-		if(rdma_create_qp(cm_id, pd, &qp_attr)){
+		if (rdma_create_qp(cm_id, pd, &qp_attr)) {
 			throw std::runtime_error("rdma_create_qp failed!");
 		}
 
+		sge.addr = (uintptr_t) buffer;
+		sge.length = sizeof(char);
+		sge.lkey = mr->lkey;
 
+		recv_wr.sg_list = &sge;
+		recv_wr.num_sge = 1;
 
+		if (ibv_post_recv(cm_id->qp, &recv_wr, &bad_recv_wr)) {
+			throw std::runtime_error("ibv_post_recv failed!");
+		}
 
+		rep_pdata.buf_va = htonll((uintptr_t) buffer);
+		rep_pdata.buf_rkey = htonl(mr->rkey);
+
+		conn_param.responder_resources = 1;
+		conn_param.private_data = &rep_pdata;
+		conn_param.private_data_len = sizeof rep_pdata;
+
+		if (rdma_accept(cm_id, &conn_param)) {
+			throw std::runtime_error("rdma_accept failed!");
+		}
+		if (rdma_get_cm_event(cm_channel, &event)) {
+			throw std::runtime_error("rdma_get_cm_event failed!");
+		}
+		if (event->event != RDMA_CM_EVENT_ESTABLISHED) {
+			throw std::runtime_error("RDMA_CM_EVENT_ESTABLISHED failed!");
+		}
+		rdma_ack_cm_event(event);
+
+		if (ibv_get_cq_event(comp_chan, &evt_cq, &cq_context)) {
+			throw std::runtime_error("ibv_get_cq_event failed!");
+		}
+
+		if (ibv_req_notify_cq(cq, 0)) {
+			throw std::runtime_error("ibv_req_notify_cq failed!");
+		}
+
+		if (ibv_poll_cq(cq, 1, &wc) < 1) {
+			throw std::runtime_error("ibv_poll_cq failed!");
+		}
+
+		if (wc.status != IBV_WC_SUCCESS) {
+			throw std::runtime_error("wc.status failed!");
+		}
+
+		cerr << "Receive :" << (char) buffer[0] << endl;
+
+		free(buffer);
 	} catch (std::exception &e) {
 		cerr << "Exception: " << e.what() << endl;
 	}

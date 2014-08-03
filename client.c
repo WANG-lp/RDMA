@@ -56,7 +56,11 @@ int main(int argc, char *argv[]) {
 	void *cq_context;
 
 	struct addrinfo *res, *t;
-	struct addrinfo hints = { .ai_family = AF_INET, .ai_socktype = SOCK_STREAM };
+	//struct addrinfo hints = { .ai_family = AF_INET, .ai_socktype = SOCK_STREAM };
+	struct addrinfo *hints = (struct addrinfo*) malloc(sizeof(struct addrinfo));
+	hints->ai_family = AF_INET;
+	hints->ai_socktype = SOCK_STREAM;
+
 	int n;
 
 	uint32_t *buf;
@@ -77,9 +81,11 @@ int main(int argc, char *argv[]) {
 	if (err)
 		return err;
 
-	n = getaddrinfo(argv[1], "20079", &hints, &res);
-	if (n < 0)
+	n = getaddrinfo(argv[1], "20079", hints, &res);
+	if (n == EAI_AGAIN) {
+		printf("n = %d\n", n);
 		return 1;
+	}
 
 	/* Resolve server address and route */
 
@@ -90,8 +96,6 @@ int main(int argc, char *argv[]) {
 	}
 	if (err)
 		return err;
-
-
 
 	err = rdma_get_cm_event(cm_channel, &event);
 	if (err)
@@ -132,7 +136,7 @@ int main(int argc, char *argv[]) {
 	if (ibv_req_notify_cq(cq, 0))
 		return 1;
 
-	buf = calloc(2, sizeof(uint32_t));
+	buf = (uint32_t*) calloc(2, sizeof(uint32_t));
 	if (!buf)
 		return 1;
 
@@ -173,7 +177,6 @@ int main(int argc, char *argv[]) {
 	memcpy(&server_pdata, event->param.conn.private_data, sizeof server_pdata);
 
 	rdma_ack_cm_event(event);
-
 
 	/* Prepost receive */
 
@@ -247,10 +250,11 @@ int main(int argc, char *argv[]) {
 		if (n < 0)
 			return 1;
 	}
-out:
-	gettimeofday(&t_end, NULL);
+	out: gettimeofday(&t_end, NULL);
 
-	printf("%fms\n", ((t_end.tv_sec - t_start.tv_sec)*1000*1000 + t_end.tv_usec-t_start.tv_usec) / 1000.0);
+	printf("%fms\n",
+			((t_end.tv_sec - t_start.tv_sec) * 1000 * 1000 + t_end.tv_usec
+					- t_start.tv_usec) / 1000.0);
 
 	return 0;
 }
