@@ -4,16 +4,21 @@
  *
  */
 
-#include "RDMAClientSocket.h"
 #include <iostream>
 #include <cstdlib>
 #include <sys/time.h>
+
+#include <infiniband/verbs.h>
+
+#include "pingping-common.h"
 
 using std::cin;
 using std::cout;
 using std::cerr;
 using std::endl;
 
+#ifdef RDMASOCKET
+#include "RDMAClientSocket.h"
 int main(int argc, char* argv[]) {
 
 	char* hostip = argv[1];
@@ -45,9 +50,9 @@ int main(int argc, char* argv[]) {
 			gettimeofday(&t_end, NULL);
 
 			t_usec = (t_end.tv_sec - t_start.tv_sec) * 1000 * 1000
-					+ (t_end.tv_usec - t_start.tv_usec);
+			+ (t_end.tv_usec - t_start.tv_usec);
 			cout << id_num << '\t' << packetNum << '\t' << t_usec / 1000.0
-					<< endl;
+			<< endl;
 			usleep(10000);
 			packetNum++;
 			id_num++;
@@ -60,4 +65,22 @@ int main(int argc, char* argv[]) {
 
 	return 0;
 }
+#else
+int main(int argc, char* argv[]) {
+	char* hostip = argv[1];
+	char* port = argv[2];
+
+	try {
+		//MAXBUFFERSIZE Byte buffer
+		char *buffer = (char *) malloc(sizeof(char) * MAXBUFFERSIZE);
+		if (!buffer) {
+			throw std::runtime_error("malloc buffer failed!");
+		}
+
+	} catch (std::exception &e) {
+		cerr << "Exception: " << e.what() << endl;
+	}
+	return 0;
+}
+#endif
 

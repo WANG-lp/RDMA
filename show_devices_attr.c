@@ -64,8 +64,10 @@ int main(void) {
 		printf("The device '%s' has %d port(s)\n",
 				ibv_get_device_name(ctx->device), device_attr.phys_port_cnt);
 
-		printf("The device '%s' max mr size is %d\n",
+		printf("The device '%s' max mr size is %u\n",
 						ibv_get_device_name(ctx->device), device_attr.max_mr_size);
+		printf("The device '%s' max qp_wr size is %d\n",
+								ibv_get_device_name(ctx->device), device_attr.max_qp_wr);
 
 		rc = ibv_close_device(ctx);
 		if (rc) {

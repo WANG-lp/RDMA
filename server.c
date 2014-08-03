@@ -79,7 +79,6 @@ int main(int argc, char *argv[]) {
 	if (err)
 		return 1;
 
-while(1){
 	err = rdma_get_cm_event(cm_channel, &event);
 	if (err)
 		return err;
@@ -208,7 +207,6 @@ while(1){
 	if (wc.status != IBV_WC_SUCCESS)
 		return 1;
 
-}
 	ibv_ack_cq_events(cq, 2);
 
 	return 0;

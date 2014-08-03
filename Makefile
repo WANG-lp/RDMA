@@ -8,10 +8,10 @@ LIBS += -lrdmacm -libverbs -lrt
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c $^ -o $@
 
-pingpong-server: pingpong-server.o RDMAServerSocket.o RDMAClientSocket.o
+pingpong-server: pingpong-server.o RDMAServerSocket.o RDMAClientSocket.o pingpong-common.o
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) $^ $(LIBS) -o $@
 
-pingpong-client: pingpong-client.o RDMAClientSocket.o
+pingpong-client: pingpong-client.o RDMAClientSocket.o pingpong-common.o
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) $^ $(LIBS) -o $@
 
 .PHONY:
