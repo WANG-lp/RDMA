@@ -207,6 +207,7 @@ int main(int argc, char *argv[]) {
 	if (wc.status != IBV_WC_SUCCESS)
 		return 1;
 
+	printf("before ack cq 2\n");
 	ibv_ack_cq_events(cq, 2);
 
 	return 0;

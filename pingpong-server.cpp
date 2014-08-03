@@ -75,7 +75,7 @@ int main(int argc, char* argv[]) {
 
 	try {
 		//MAXBUFFERSIZE Byte buffer
-		char *buffer = (char *) malloc(sizeof(char) * MAXBUFFERSIZE);
+		uint32_t *buffer = (uint32_t *) malloc(sizeof(uint32_t) * 10);
 		if (!buffer) {
 			throw std::runtime_error("malloc buffer failed!");
 		}
@@ -133,7 +133,7 @@ int main(int argc, char* argv[]) {
 			throw std::runtime_error("ibv_req_notify_cq failed!");
 		}
 
-		mr = ibv_reg_mr(pd, buffer, MAXBUFFERSIZE * sizeof(char),
+		mr = ibv_reg_mr(pd, buffer, 10 * sizeof(uint32_t),
 				IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ
 						| IBV_ACCESS_REMOTE_WRITE);
 		if (!mr) {
@@ -154,8 +154,9 @@ int main(int argc, char* argv[]) {
 			throw std::runtime_error("rdma_create_qp failed!");
 		}
 
-		sge.addr = (uintptr_t) buffer;
-		sge.length = sizeof(char);
+		//prepare to receive from client ---- ping function
+		sge.addr = (uintptr_t) (buffer+sizeof(char));
+		sge.length = sizeof(uint32_t);
 		sge.lkey = mr->lkey;
 
 		recv_wr.sg_list = &sge;
@@ -196,10 +197,42 @@ int main(int argc, char* argv[]) {
 		}
 
 		if (wc.status != IBV_WC_SUCCESS) {
-			throw std::runtime_error("wc.status failed!");
+			throw std::runtime_error("IBV_WC_SUCCESS failed!");
 		}
 
-		cerr << "Receive :" << (char) buffer[0] << endl;
+		cerr << "Receive: " << (int)ntohl(buffer[1]) << endl;
+
+
+		//sent to client ---- pong function
+		buffer[0] = htonl(ntohl(buffer[1])+1);
+		sge.addr = (uintptr_t) (buffer);
+		sge.length = sizeof(uint32_t);
+		sge.lkey = mr->lkey;
+
+		send_wr.wr_id = 0;
+		send_wr.opcode = IBV_WR_SEND;
+		send_wr.send_flags = IBV_SEND_SIGNALED;
+		send_wr.sg_list = &sge;
+		send_wr.num_sge = 1;
+
+		if (ibv_post_send(cm_id->qp, &send_wr, &bad_send_wr)){
+			throw std::runtime_error("ibv_post_send failed!");
+		}
+
+		/* Wait for send completion */
+
+		if (ibv_get_cq_event(comp_chan, &evt_cq, &cq_context)){
+			throw std::runtime_error("ibv_get_cq_event failed!");
+		}
+
+		if (ibv_poll_cq(cq, 1, &wc) < 1){
+			throw std::runtime_error("ibv_poll_cq failed!");
+		}
+
+		if (wc.status != IBV_WC_SUCCESS){
+			throw std::runtime_error("IBV_WC_SUCCESS 2 failed!");
+		}
+		ibv_ack_cq_events(cq, 2);
 
 		free(buffer);
 	} catch (std::exception &e) {
