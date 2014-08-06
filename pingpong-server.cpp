@@ -1,6 +1,6 @@
 /*
  *
- * Usage: ./pingpong-server ip port MaxPacketSize(MByte)
+ * Usage: ./pingpong-server ip port MaxPacketSize(KByte)
  *
  */
 
@@ -159,7 +159,7 @@ int main(int argc, char* argv[]) {
 		//prepare to receive from client ---- ping function
 		for (int i = 1; i <= maxPacketSize; i++) {
 			sge.addr = (uintptr_t) (buffer);
-			sge.length = sizeof(uint32_t) * 1024 * 1024 * i; // i MByte
+			sge.length = sizeof(uint32_t) * 1 * 1024 * i; // i MByte
 			sge.length /= 4;
 			sge.lkey = mr->lkey;
 
@@ -189,7 +189,7 @@ int main(int argc, char* argv[]) {
 		}
 		rdma_ack_cm_event(event);
 
-		printf("Id:\tSize(MByte):\n");
+		printf("Id:\tSize(KByte):\n");
 		for (int i = 1; i <= maxPacketSize; i++) {
 			if (ibv_get_cq_event(comp_chan, &evt_cq, &cq_context)) {
 				throw std::runtime_error("ibv_get_cq_event failed!");
@@ -213,7 +213,7 @@ int main(int argc, char* argv[]) {
 			//sent to client ---- pong function
 			//buffer[0] = htonl(ntohl(buffer[1]));
 			sge.addr = (uintptr_t) (buffer);
-			sge.length = sizeof(uint32_t) * 1024 * 1024 * i; // i MByte
+			sge.length = sizeof(uint32_t) * 1 * 1024 * i; // i MByte
 			sge.length /= 4;
 			sge.lkey = mr->lkey;
 

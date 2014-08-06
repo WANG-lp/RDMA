@@ -1,6 +1,6 @@
 /*
  *
- * Usage: ./pingpong-client server-ip port MaxPacketSize(MByte)
+ * Usage: ./pingpong-client server-ip port MaxPacketSize(KByte)
  *
  */
 
@@ -210,7 +210,7 @@ int main(int argc, char* argv[]) {
 		//prepare to receive from client ---- pong function
 		for (int i = 1; i <= maxPacketSize; i++) {
 			sge.addr = (uintptr_t) (buffer);
-			sge.length = sizeof(uint32_t) * 1024 * 1024 * i; // i MByte
+			sge.length = sizeof(uint32_t) * 1 * 1024 * i; // i MByte
 			sge.length /= 4;
 			sge.lkey = mr->lkey;
 
@@ -224,13 +224,13 @@ int main(int argc, char* argv[]) {
 
 		memset(buffer, 0x01, sizeof(buffer));
 
-		printf("Id:\tSize(MByte):\tTime(ms):\n");
+		printf("Id:\tSize(KByte):\tTime(ms):\n");
 		for (int i = 1; i <= maxPacketSize; i++) {
 
 			gettimeofday(&t_start, NULL);
 
 			sge.addr = (uintptr_t) (buffer);
-			sge.length = sizeof(uint32_t) * 1024 * 1024 * i; // i MByte
+			sge.length = sizeof(uint32_t) * 1 * 1024 * i; // i MByte
 			sge.length /= 4;
 			sge.lkey = mr->lkey;
 
@@ -261,27 +261,24 @@ int main(int argc, char* argv[]) {
 			}
 
 //			//receive from server ---- pong function
-			int n;
-			while (1) {
-				if (ibv_get_cq_event(comp_chan, &evt_cq, &cq_context))
-					return 1;
 
-				if (ibv_req_notify_cq(cq, 0))
-					return 1;
-
-				while ((n = ibv_poll_cq(cq, 1, &wc)) > 0) {
-					if (wc.status != IBV_WC_SUCCESS)
-						return 1;
-
-					if (wc.wr_id == 0) {
-						goto out;
-					}
-				}
-
-				if (n < 0)
-					return 1;
+			if (ibv_get_cq_event(comp_chan, &evt_cq, &cq_context)) {
+				throw std::runtime_error("ibv_get_cq_event failed!");
 			}
-			out: gettimeofday(&t_end, NULL);
+
+			if (ibv_req_notify_cq(cq, 0)) {
+				throw std::runtime_error("ibv_req_notify_cq failed!");
+			}
+
+			if (ibv_poll_cq(cq, 1, &wc) < 1) {
+				throw std::runtime_error("ibv_poll_cq failed!");
+			}
+
+			if (wc.status != IBV_WC_SUCCESS) {
+				throw std::runtime_error("IBV_WC_SUCCESS failed!");
+			}
+
+			gettimeofday(&t_end, NULL);
 			printf("%d\t%d\t        %f\n", i, i,
 					((t_end.tv_sec - t_start.tv_sec) * 1000 * 1000
 							+ t_end.tv_usec - t_start.tv_usec) / 1000.0);
