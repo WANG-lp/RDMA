@@ -1,6 +1,6 @@
 /*
  *
- * Usage: ./pingpong-client server-ip port MaxPacketSize
+ * Usage: ./pingpong-client server-ip port MaxPacketSize(MByte)
  *
  */
 
@@ -70,6 +70,7 @@ int main(int argc, char* argv[]) {
 int main(int argc, char* argv[]) {
 	char* hostip = argv[1];
 	char* port = argv[2];
+	int maxPacketSize = atoi(argv[3]);
 	pdata server_pdata;
 
 	rdma_event_channel *cm_channel;
@@ -91,6 +92,9 @@ int main(int argc, char* argv[]) {
 	ibv_wc wc;
 	void *cq_context;
 
+	struct timeval t_start;
+	struct timeval t_end;
+
 	addrinfo *hints, *res;
 	hints = (addrinfo *) malloc(sizeof(addrinfo));
 	hints->ai_family = AF_INET;
@@ -98,7 +102,8 @@ int main(int argc, char* argv[]) {
 
 	try {
 		//MAXBUFFERSIZE Byte buffer
-		uint32_t *buffer = (uint32_t *) malloc(sizeof(uint32_t) * 10);
+		uint32_t *buffer = (uint32_t *) malloc(
+				sizeof(uint32_t) * MAXBUFFERSIZE);
 		if (!buffer) {
 			throw std::runtime_error("malloc buffer failed!");
 		}
@@ -164,15 +169,15 @@ int main(int argc, char* argv[]) {
 			throw std::runtime_error("ibv_req_notify_cq failed!");
 		}
 
-		mr = ibv_reg_mr(pd, buffer, 10 * sizeof(uint32_t),
+		mr = ibv_reg_mr(pd, buffer, MAXBUFFERSIZE * sizeof(uint32_t),
 				IBV_ACCESS_LOCAL_WRITE);
 		if (!mr) {
 			throw std::runtime_error("ibv_reg_mr failed!");
 		}
 
-		qp_attr.cap.max_send_wr = 1;
+		qp_attr.cap.max_send_wr = MAXPINGPONGTIME;
 		qp_attr.cap.max_send_sge = 1;
-		qp_attr.cap.max_recv_wr = 1;
+		qp_attr.cap.max_recv_wr = MAXPINGPONGTIME;
 		qp_attr.cap.max_recv_sge = 1;
 
 		qp_attr.send_cq = cq;
@@ -202,57 +207,86 @@ int main(int argc, char* argv[]) {
 				sizeof server_pdata);
 		rdma_ack_cm_event(event);
 
-		buffer[1] = htonl(1001);
+		//prepare to receive from client ---- pong function
+		for (int i = 1; i <= maxPacketSize; i++) {
+			sge.addr = (uintptr_t) (buffer);
+			sge.length = sizeof(uint32_t) * 1024 * 1024 * i; // i MByte
+			sge.length /= 4;
+			sge.lkey = mr->lkey;
 
-		sge.addr = (uintptr_t) (buffer + sizeof(char));
-		sge.length = sizeof(uint32_t);
-		sge.lkey = mr->lkey;
+			recv_wr.sg_list = &sge;
+			recv_wr.num_sge = 1;
 
-		send_wr.wr_id = 1;
-		send_wr.opcode = IBV_WR_SEND;
-		send_wr.send_flags = IBV_SEND_SIGNALED;
-		send_wr.sg_list = &sge;
-		send_wr.num_sge = 1;
-
-		if (ibv_post_send(cm_id->qp, &send_wr, &bad_send_wr)) {
-			throw std::runtime_error("ibv_post_send failed!");
+			if (ibv_post_recv(cm_id->qp, &recv_wr, &bad_recv_wr)) {
+				throw std::runtime_error("ibv_post_recv failed!");
+			}
 		}
 
-		//receive from server ---- pong function
-		sge.addr = (uintptr_t) (buffer);
-		sge.length = sizeof(uint32_t);
-		sge.lkey = mr->lkey;
+		memset(buffer, 0x01, sizeof(buffer));
 
-		recv_wr.wr_id = 0;
-		recv_wr.sg_list = &sge;
-		recv_wr.num_sge = 1;
+		printf("Id:\tSize(MByte):\tTime(ms):\n");
+		for (int i = 1; i <= maxPacketSize; i++) {
 
-		if (ibv_post_recv(cm_id->qp, &recv_wr, &bad_recv_wr)) {
-			throw std::runtime_error("ibv_post_recv failed!");
-		}
+			gettimeofday(&t_start, NULL);
 
-		int n;
-		while (1) {
-			if (ibv_get_cq_event(comp_chan, &evt_cq, &cq_context))
-				return 1;
+			sge.addr = (uintptr_t) (buffer);
+			sge.length = sizeof(uint32_t) * 1024 * 1024 * i; // i MByte
+			sge.length /= 4;
+			sge.lkey = mr->lkey;
 
-			if (ibv_req_notify_cq(cq, 0))
-				return 1;
+			send_wr.wr_id = i;
+			send_wr.opcode = IBV_WR_SEND;
+			send_wr.send_flags = IBV_SEND_SIGNALED;
+			send_wr.sg_list = &sge;
+			send_wr.num_sge = 1;
 
-			while ((n = ibv_poll_cq(cq, 1, &wc)) > 0) {
-				if (wc.status != IBV_WC_SUCCESS)
-					return 1;
-
-				if (wc.wr_id == 0) {
-					goto out;
-				}
+			if (ibv_post_send(cm_id->qp, &send_wr, &bad_send_wr)) {
+				throw std::runtime_error("ibv_post_send failed!");
 			}
 
-			if (n < 0)
-				return 1;
-		}
-		out: cerr << "Receive: " << (int) ntohl(buffer[0]) << endl;
+			if (ibv_get_cq_event(comp_chan, &evt_cq, &cq_context)) {
+				throw std::runtime_error("ibv_get_cq_event failed!");
+			}
 
+			if (ibv_req_notify_cq(cq, 0)) {
+				throw std::runtime_error("ibv_req_notify_cq failed!");
+			}
+
+			if (ibv_poll_cq(cq, 1, &wc) < 1) {
+				throw std::runtime_error("ibv_poll_cq failed!");
+			}
+
+			if (wc.status != IBV_WC_SUCCESS) {
+				throw std::runtime_error("IBV_WC_SUCCESS 2 failed!");
+			}
+
+//			//receive from server ---- pong function
+			int n;
+			while (1) {
+				if (ibv_get_cq_event(comp_chan, &evt_cq, &cq_context))
+					return 1;
+
+				if (ibv_req_notify_cq(cq, 0))
+					return 1;
+
+				while ((n = ibv_poll_cq(cq, 1, &wc)) > 0) {
+					if (wc.status != IBV_WC_SUCCESS)
+						return 1;
+
+					if (wc.wr_id == 0) {
+						goto out;
+					}
+				}
+
+				if (n < 0)
+					return 1;
+			}
+			out: gettimeofday(&t_end, NULL);
+			printf("%d\t%d\t        %f\n", i, i,
+					((t_end.tv_sec - t_start.tv_sec) * 1000 * 1000
+							+ t_end.tv_usec - t_start.tv_usec) / 1000.0);
+
+		}
 		free(buffer);
 	} catch (std::exception &e) {
 		cerr << "Exception: " << e.what() << endl;

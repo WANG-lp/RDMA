@@ -13,7 +13,9 @@
 #include <stdint.h>
 
 #define RESOLVE_TIMEOUT_MS	5000
-#define MAXBUFFERSIZE	1024*1024*1024 // 1G
+#define MAXBUFFERSIZE	(1024*1024*16) //
+#define MAXPINGPONGTIME	1024
+
 
 struct pdata {
 	uint64_t buf_va;

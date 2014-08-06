@@ -1,6 +1,6 @@
 /*
  *
- * Usage: ./pingpong-server ip port
+ * Usage: ./pingpong-server ip port MaxPacketSize(MByte)
  *
  */
 
@@ -49,6 +49,7 @@ int main(int argc, char* argv[]) {
 
 	char* hostip = argv[1];
 	char* port = argv[2];
+	int maxPacketSize = atoi(argv[3]);
 	pdata rep_pdata;
 
 	rdma_event_channel *cm_channel;
@@ -75,7 +76,8 @@ int main(int argc, char* argv[]) {
 
 	try {
 		//MAXBUFFERSIZE Byte buffer
-		uint32_t *buffer = (uint32_t *) malloc(sizeof(uint32_t) * 10);
+		uint32_t *buffer = (uint32_t *) malloc(
+				sizeof(uint32_t) * MAXBUFFERSIZE);
 		if (!buffer) {
 			throw std::runtime_error("malloc buffer failed!");
 		}
@@ -133,16 +135,16 @@ int main(int argc, char* argv[]) {
 			throw std::runtime_error("ibv_req_notify_cq failed!");
 		}
 
-		mr = ibv_reg_mr(pd, buffer, 10 * sizeof(uint32_t),
+		mr = ibv_reg_mr(pd, buffer, MAXBUFFERSIZE * sizeof(uint32_t),
 				IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ
 						| IBV_ACCESS_REMOTE_WRITE);
 		if (!mr) {
 			throw std::runtime_error("ibv_reg_mr failed!");
 		}
 
-		qp_attr.cap.max_send_wr = 1;
+		qp_attr.cap.max_send_wr = MAXPINGPONGTIME;
 		qp_attr.cap.max_send_sge = 1;
-		qp_attr.cap.max_recv_wr = 1;
+		qp_attr.cap.max_recv_wr = MAXPINGPONGTIME;
 		qp_attr.cap.max_recv_sge = 1;
 
 		qp_attr.send_cq = cq;
@@ -155,15 +157,18 @@ int main(int argc, char* argv[]) {
 		}
 
 		//prepare to receive from client ---- ping function
-		sge.addr = (uintptr_t) (buffer+sizeof(char));
-		sge.length = sizeof(uint32_t);
-		sge.lkey = mr->lkey;
+		for (int i = 1; i <= maxPacketSize; i++) {
+			sge.addr = (uintptr_t) (buffer);
+			sge.length = sizeof(uint32_t) * 1024 * 1024 * i; // i MByte
+			sge.length /= 4;
+			sge.lkey = mr->lkey;
 
-		recv_wr.sg_list = &sge;
-		recv_wr.num_sge = 1;
+			recv_wr.sg_list = &sge;
+			recv_wr.num_sge = 1;
 
-		if (ibv_post_recv(cm_id->qp, &recv_wr, &bad_recv_wr)) {
-			throw std::runtime_error("ibv_post_recv failed!");
+			if (ibv_post_recv(cm_id->qp, &recv_wr, &bad_recv_wr)) {
+				throw std::runtime_error("ibv_post_recv failed!");
+			}
 		}
 
 		rep_pdata.buf_va = htonll((uintptr_t) buffer);
@@ -184,55 +189,64 @@ int main(int argc, char* argv[]) {
 		}
 		rdma_ack_cm_event(event);
 
-		if (ibv_get_cq_event(comp_chan, &evt_cq, &cq_context)) {
-			throw std::runtime_error("ibv_get_cq_event failed!");
+		printf("Id:\tSize(MByte):\n");
+		for (int i = 1; i <= maxPacketSize; i++) {
+			if (ibv_get_cq_event(comp_chan, &evt_cq, &cq_context)) {
+				throw std::runtime_error("ibv_get_cq_event failed!");
+			}
+
+			if (ibv_req_notify_cq(cq, 0)) {
+				throw std::runtime_error("ibv_req_notify_cq failed!");
+			}
+
+			if (ibv_poll_cq(cq, 1, &wc) < 1) {
+				throw std::runtime_error("ibv_poll_cq failed!");
+			}
+
+			if (wc.status != IBV_WC_SUCCESS) {
+				throw std::runtime_error("IBV_WC_SUCCESS failed!");
+			}
+
+			//cerr << "Receive: " << (int) ntohl(buffer[1]) << endl;
+			printf("%d\t%d\n", i, i);
+
+			//sent to client ---- pong function
+			//buffer[0] = htonl(ntohl(buffer[1]));
+			sge.addr = (uintptr_t) (buffer);
+			sge.length = sizeof(uint32_t) * 1024 * 1024 * i; // i MByte
+			sge.length /= 4;
+			sge.lkey = mr->lkey;
+
+			send_wr.wr_id = i;
+			send_wr.opcode = IBV_WR_SEND;
+			send_wr.send_flags = IBV_SEND_SIGNALED;
+			send_wr.sg_list = &sge;
+			send_wr.num_sge = 1;
+
+			if (ibv_post_send(cm_id->qp, &send_wr, &bad_send_wr)) {
+				throw std::runtime_error("ibv_post_send failed!");
+			}
+
+			/* Wait for send completion */
+
+			if (ibv_get_cq_event(comp_chan, &evt_cq, &cq_context)) {
+				throw std::runtime_error("ibv_get_cq_event failed!");
+			}
+
+			if (ibv_req_notify_cq(cq, 0)) {
+				throw std::runtime_error("ibv_req_notify_cq failed!");
+			}
+
+			if (ibv_poll_cq(cq, 1, &wc) < 1) {
+				throw std::runtime_error("ibv_poll_cq failed!");
+			}
+
+			if (wc.status != IBV_WC_SUCCESS) {
+				throw std::runtime_error("IBV_WC_SUCCESS 2 failed!");
+			}
+			ibv_ack_cq_events(cq, 2);
+
 		}
-
-		if (ibv_req_notify_cq(cq, 0)) {
-			throw std::runtime_error("ibv_req_notify_cq failed!");
-		}
-
-		if (ibv_poll_cq(cq, 1, &wc) < 1) {
-			throw std::runtime_error("ibv_poll_cq failed!");
-		}
-
-		if (wc.status != IBV_WC_SUCCESS) {
-			throw std::runtime_error("IBV_WC_SUCCESS failed!");
-		}
-
-		cerr << "Receive: " << (int)ntohl(buffer[1]) << endl;
-
-
-		//sent to client ---- pong function
-		buffer[0] = htonl(ntohl(buffer[1])+1);
-		sge.addr = (uintptr_t) (buffer);
-		sge.length = sizeof(uint32_t);
-		sge.lkey = mr->lkey;
-
-		send_wr.wr_id = 0;
-		send_wr.opcode = IBV_WR_SEND;
-		send_wr.send_flags = IBV_SEND_SIGNALED;
-		send_wr.sg_list = &sge;
-		send_wr.num_sge = 1;
-
-		if (ibv_post_send(cm_id->qp, &send_wr, &bad_send_wr)){
-			throw std::runtime_error("ibv_post_send failed!");
-		}
-
-		/* Wait for send completion */
-
-		if (ibv_get_cq_event(comp_chan, &evt_cq, &cq_context)){
-			throw std::runtime_error("ibv_get_cq_event failed!");
-		}
-
-		if (ibv_poll_cq(cq, 1, &wc) < 1){
-			throw std::runtime_error("ibv_poll_cq failed!");
-		}
-
-		if (wc.status != IBV_WC_SUCCESS){
-			throw std::runtime_error("IBV_WC_SUCCESS 2 failed!");
-		}
-		ibv_ack_cq_events(cq, 2);
 
 		free(buffer);
 	} catch (std::exception &e) {
