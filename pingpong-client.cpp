@@ -11,7 +11,8 @@
 
 #include <infiniband/verbs.h>
 
-#include "pingping-common.h"
+#include "Arguments.h"
+#include "pingpong-common.h"
 
 using std::cin;
 using std::cout;
@@ -68,9 +69,6 @@ int main(int argc, char* argv[]) {
 }
 #else
 int main(int argc, char* argv[]) {
-	char* hostip = argv[1];
-	char* port = argv[2];
-	int maxPacketSize = atoi(argv[3]);
 	pdata server_pdata;
 
 	rdma_event_channel *cm_channel;
@@ -95,6 +93,8 @@ int main(int argc, char* argv[]) {
 	struct timeval t_start;
 	struct timeval t_end;
 
+	Arguments* args = new Arguments(argc, argv);
+
 	addrinfo *hints, *res;
 	hints = (addrinfo *) malloc(sizeof(addrinfo));
 	hints->ai_family = AF_INET;
@@ -108,7 +108,7 @@ int main(int argc, char* argv[]) {
 			throw std::runtime_error("malloc buffer failed!");
 		}
 
-		query_device();
+		query_device(args);
 
 		cm_channel = rdma_create_event_channel();
 		if (!cm_channel) {
@@ -119,7 +119,7 @@ int main(int argc, char* argv[]) {
 			throw std::runtime_error("rdma_create_id failed!");
 		}
 
-		if (getaddrinfo(argv[1], port, hints, &res)) {
+		if (getaddrinfo(argv[1], args->port, hints, &res)) {
 			throw std::runtime_error("rdma_create_id failed!");
 		}
 		int err;
@@ -208,7 +208,7 @@ int main(int argc, char* argv[]) {
 		rdma_ack_cm_event(event);
 
 		//prepare to receive from client ---- pong function
-		for (int i = 1; i <= maxPacketSize; i++) {
+		for (int i = 1; i <= args->max_packet_size; i++) {
 			sge.addr = (uintptr_t) (buffer);
 			sge.length = sizeof(uint32_t) * 1 * 1024 * i; // i MByte
 			sge.length /= 4;
@@ -225,7 +225,7 @@ int main(int argc, char* argv[]) {
 		memset(buffer, 0x01, sizeof(buffer));
 
 		printf("Id:\tSize(KByte):\tTime(ms):\n");
-		for (int i = 1; i <= maxPacketSize; i++) {
+		for (int i = 1; i <= args->max_packet_size; i++) {
 
 			gettimeofday(&t_start, NULL);
 

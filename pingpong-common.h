@@ -12,6 +12,8 @@
 #include <cstdlib>
 #include <stdint.h>
 
+#include "Arguments.h"
+
 #define RESOLVE_TIMEOUT_MS	5000
 #define MAXBUFFERSIZE	(1024*1024*16) //
 #define MAXPINGPONGTIME	1024
@@ -22,6 +24,6 @@ struct pdata {
 	uint32_t buf_rkey;
 };
 
-void query_device();
+void query_device(Arguments* args);
 
 #endif /* PINGPING_COMMON_H_ */

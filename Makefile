@@ -1,17 +1,18 @@
 
 all: pingpong-server pingpong-client
 
-CXXFLAGS += -O3
+CXXFLAGS += -O3 -std=c++0x
+LDFLAGS  += -std=c++0x
 
 LIBS += -lrdmacm -libverbs -lrt
 
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c $^ -o $@
 
-pingpong-server: pingpong-server.o RDMAServerSocket.o RDMAClientSocket.o pingpong-common.o
+pingpong-server: pingpong-server.o Arguments.o pingpong-common.o
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) $^ $(LIBS) -o $@
 
-pingpong-client: pingpong-client.o RDMAClientSocket.o pingpong-common.o
+pingpong-client: pingpong-client.o Arguments.o pingpong-common.o
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) $^ $(LIBS) -o $@
 
 .PHONY:

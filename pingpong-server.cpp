@@ -9,7 +9,8 @@
 #include <cstdio>
 #include <stdexcept>
 
-#include "pingping-common.h"
+#include "Arguments.h"
+#include "pingpong-common.h"
 
 using std::cin;
 using std::cout;
@@ -47,9 +48,6 @@ int main(int argc, char* argv[]) {
 #else
 int main(int argc, char* argv[]) {
 
-	char* hostip = argv[1];
-	char* port = argv[2];
-	int maxPacketSize = atoi(argv[3]);
 	pdata rep_pdata;
 
 	rdma_event_channel *cm_channel;
@@ -74,6 +72,8 @@ int main(int argc, char* argv[]) {
 
 	sockaddr_in sin;
 
+	Arguments* args = new Arguments(argc, argv);
+
 	try {
 		//MAXBUFFERSIZE Byte buffer
 		uint32_t *buffer = (uint32_t *) malloc(
@@ -82,7 +82,7 @@ int main(int argc, char* argv[]) {
 			throw std::runtime_error("malloc buffer failed!");
 		}
 
-		query_device();
+		query_device(args);
 
 		cm_channel = rdma_create_event_channel();
 		if (!cm_channel) {
@@ -94,7 +94,7 @@ int main(int argc, char* argv[]) {
 		}
 
 		sin.sin_family = AF_INET;
-		sin.sin_port = htons(atoi(port));
+		sin.sin_port = htons(atoi(args->port));
 		sin.sin_addr.s_addr = INADDR_ANY;
 
 		if (rdma_bind_addr(listen_id, (struct sockaddr *) &sin)) {
@@ -157,7 +157,7 @@ int main(int argc, char* argv[]) {
 		}
 
 		//prepare to receive from client ---- ping function
-		for (int i = 1; i <= maxPacketSize; i++) {
+		for (int i = 1; i <= args->max_packet_size; i++) {
 			sge.addr = (uintptr_t) (buffer);
 			sge.length = sizeof(uint32_t) * 1 * 1024 * i; // i MByte
 			sge.length /= 4;
@@ -190,7 +190,7 @@ int main(int argc, char* argv[]) {
 		rdma_ack_cm_event(event);
 
 		printf("Id:\tSize(KByte):\n");
-		for (int i = 1; i <= maxPacketSize; i++) {
+		for (int i = 1; i <= args->max_packet_size; i++) {
 			if (ibv_get_cq_event(comp_chan, &evt_cq, &cq_context)) {
 				throw std::runtime_error("ibv_get_cq_event failed!");
 			}
