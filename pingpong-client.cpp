@@ -234,7 +234,7 @@ int main(int argc, char* argv[]) {
 			float time_ms = ((t_end.tv_sec - t_start.tv_sec) * 1000 * 1000
 					+ t_end.tv_usec - t_start.tv_usec) / 1000.0;
 			printf("%d\t%d\t        %f\t%f\n", id, i, time_ms,
-					(i*8) / (time_ms / 1000));
+					(i*8* 2) / (time_ms / 1000));
 			id++;
 		}
 
