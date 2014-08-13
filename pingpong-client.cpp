@@ -176,7 +176,7 @@ int main(int argc, char* argv[]) {
 		memset(buffer, 0x01, sizeof(buffer));
 
 		int id = 0;
-		printf("Id:\tSize(MByte):\tTime(ms):\n");
+		printf("Id:\tSize(MByte):\tTime(ms):\tSpeed(Mbits/s):\n");
 		for (int i = 1; i <= args->max_packet_size; i++) {
 
 			gettimeofday(&t_start, NULL);
@@ -231,9 +231,10 @@ int main(int argc, char* argv[]) {
 			}
 
 			gettimeofday(&t_end, NULL);
-			printf("%d\t%d\t        %f\n", id, i,
-					((t_end.tv_sec - t_start.tv_sec) * 1000 * 1000
-							+ t_end.tv_usec - t_start.tv_usec) / 1000.0);
+			float time_ms = ((t_end.tv_sec - t_start.tv_sec) * 1000 * 1000
+					+ t_end.tv_usec - t_start.tv_usec) / 1000.0;
+			printf("%d\t%d\t        %f\t%f\n", id, i, time_ms,
+					(i*8) / (time_ms / 1000));
 			id++;
 		}
 
