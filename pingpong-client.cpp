@@ -1,6 +1,6 @@
 /*
  *
- * Usage: ./pingpong-client server-ip port MaxPacketSize(KByte)
+ * Usage: ./pingpong-client server-ip port MaxPacketSize(MByte)
  *
  */
 
@@ -19,55 +19,6 @@ using std::cout;
 using std::cerr;
 using std::endl;
 
-#ifdef RDMASOCKET
-#include "RDMAClientSocket.h"
-int main(int argc, char* argv[]) {
-
-	char* hostip = argv[1];
-	char* port = argv[2];
-	int maxPacketNum = atoi(argv[3]);
-	int packetNum = 1;
-
-	timeval t_start;
-	timeval t_end;
-
-	int id_num = 0;
-
-	int t_usec;
-
-	cout << "ID" << '\t' << "Size(k)" << '\t' << "Time(ms)" << endl;
-
-	rdma::ClientSocket *clientSocket = new rdma::ClientSocket(hostip, port,
-			1024, 1024);
-	rdma::Buffer sendPacket = clientSocket->getWriteBuffer();
-	while (packetNum <= maxPacketNum) {
-		try {
-			gettimeofday(&t_start, NULL);
-			for (int i = 0; i < packetNum; i++) {
-				memset(sendPacket.get(), 0xfe, sendPacket.size);
-				clientSocket->write(sendPacket);
-				rdma::Buffer readPacket = clientSocket->read();
-				clientSocket->returnReadBuffer(readPacket);
-			}
-			gettimeofday(&t_end, NULL);
-
-			t_usec = (t_end.tv_sec - t_start.tv_sec) * 1000 * 1000
-			+ (t_end.tv_usec - t_start.tv_usec);
-			cout << id_num << '\t' << packetNum << '\t' << t_usec / 1000.0
-			<< endl;
-			usleep(10000);
-			packetNum++;
-			id_num++;
-		} catch (std::exception& e) {
-			cerr << "Exception: " << e.what() << endl;
-		}
-	}
-
-	delete clientSocket;
-
-	return 0;
-}
-#else
 int main(int argc, char* argv[]) {
 	pdata server_pdata;
 
@@ -93,14 +44,14 @@ int main(int argc, char* argv[]) {
 	struct timeval t_start;
 	struct timeval t_end;
 
-	Arguments* args = new Arguments(argc, argv);
-
 	addrinfo *hints, *res;
 	hints = (addrinfo *) malloc(sizeof(addrinfo));
 	hints->ai_family = AF_INET;
 	hints->ai_socktype = SOCK_STREAM;
 
 	try {
+		Arguments* args = new Arguments(argc, argv);
+
 		//MAXBUFFERSIZE Byte buffer
 		uint32_t *buffer = (uint32_t *) malloc(
 				sizeof(uint32_t) * MAXBUFFERSIZE);
@@ -175,9 +126,9 @@ int main(int argc, char* argv[]) {
 			throw std::runtime_error("ibv_reg_mr failed!");
 		}
 
-		qp_attr.cap.max_send_wr = MAXPINGPONGTIME;
+		qp_attr.cap.max_send_wr = args->max_qp_wr;
 		qp_attr.cap.max_send_sge = 1;
-		qp_attr.cap.max_recv_wr = MAXPINGPONGTIME;
+		qp_attr.cap.max_recv_wr = args->max_qp_wr;
 		qp_attr.cap.max_recv_sge = 1;
 
 		qp_attr.send_cq = cq;
@@ -210,7 +161,7 @@ int main(int argc, char* argv[]) {
 		//prepare to receive from client ---- pong function
 		for (int i = 1; i <= args->max_packet_size; i++) {
 			sge.addr = (uintptr_t) (buffer);
-			sge.length = sizeof(uint32_t) * 1 * 1024 * i; // i MByte
+			sge.length = sizeof(uint32_t) * 1024 * 1024 * i; // i MByte
 			sge.length /= 4;
 			sge.lkey = mr->lkey;
 
@@ -224,17 +175,18 @@ int main(int argc, char* argv[]) {
 
 		memset(buffer, 0x01, sizeof(buffer));
 
-		printf("Id:\tSize(KByte):\tTime(ms):\n");
+		int id = 0;
+		printf("Id:\tSize(MByte):\tTime(ms):\n");
 		for (int i = 1; i <= args->max_packet_size; i++) {
 
 			gettimeofday(&t_start, NULL);
 
 			sge.addr = (uintptr_t) (buffer);
-			sge.length = sizeof(uint32_t) * 1 * 1024 * i; // i MByte
+			sge.length = sizeof(uint32_t) * 1024 * 1024 * i; // i MByte
 			sge.length /= 4;
 			sge.lkey = mr->lkey;
 
-			send_wr.wr_id = i;
+			//send_wr.wr_id = i;
 			send_wr.opcode = IBV_WR_SEND;
 			send_wr.send_flags = IBV_SEND_SIGNALED;
 			send_wr.sg_list = &sge;
@@ -279,17 +231,21 @@ int main(int argc, char* argv[]) {
 			}
 
 			gettimeofday(&t_end, NULL);
-			printf("%d\t%d\t        %f\n", i, i,
+			printf("%d\t%d\t        %f\n", id, i,
 					((t_end.tv_sec - t_start.tv_sec) * 1000 * 1000
 							+ t_end.tv_usec - t_start.tv_usec) / 1000.0);
-
+			id++;
 		}
+
 		free(buffer);
+		rdma_dereg_mr(mr);
+		ibv_destroy_comp_channel(comp_chan);
+		ibv_destroy_cq(cq);
+		rdma_destroy_event_channel(cm_channel);
 	} catch (std::exception &e) {
 		cerr << "Exception: " << e.what() << endl;
 	}
 
-#endif
 	return 0;
 }
 

@@ -2,6 +2,7 @@
 #define PINGPING_COMMON_H_
 #include <infiniband/verbs.h>
 #include <rdma/rdma_cma.h>
+#include <rdma/rdma_verbs.h>
 #include <infiniband/arch.h>
 
 #include <netdb.h>
@@ -15,8 +16,7 @@
 #include "Arguments.h"
 
 #define RESOLVE_TIMEOUT_MS	5000
-#define MAXBUFFERSIZE	(1024*1024*16) //
-#define MAXPINGPONGTIME	1024
+#define MAXBUFFERSIZE	(1024*1024*256) // 1GByte
 
 
 struct pdata {

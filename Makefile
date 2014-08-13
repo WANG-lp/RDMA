@@ -2,7 +2,6 @@
 all: pingpong-server pingpong-client
 
 CXXFLAGS += -O3 -std=c++0x
-LDFLAGS  += -std=c++0x
 
 LIBS += -lrdmacm -libverbs -lrt
 

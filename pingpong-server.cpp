@@ -1,6 +1,6 @@
 /*
  *
- * Usage: ./pingpong-server ip port MaxPacketSize(KByte)
+ * Usage: ./pingpong-server ip port MaxPacketSize(MByte)
  *
  */
 
@@ -17,35 +17,6 @@ using std::cout;
 using std::cerr;
 using std::endl;
 
-#ifdef RDMASOCKET
-#include "RDMAServerSocket.h"
-int main(int argc, char* argv[]) {
-
-	char* hostip = argv[1];
-	char* port = argv[2];
-
-	int id_num = 0;
-
-	rdma::ServerSocket serverSocket(hostip, port, 1024, 1024);
-	rdma::ClientSocket* clientSocket = serverSocket.accept();
-
-	while (1) {
-		try {
-			rdma::Buffer readPacket = clientSocket->read();
-			rdma::Buffer sendPacket = clientSocket->getWriteBuffer();
-			memcpy(sendPacket.get(), readPacket.get(), readPacket.size);
-			clientSocket->write(sendPacket);
-			clientSocket->returnReadBuffer(readPacket);
-		} catch (std::exception &e) {
-			cerr << "Exception: " << e.what() << endl;
-		}
-	}
-
-	delete clientSocket;
-
-	return 0;
-}
-#else
 int main(int argc, char* argv[]) {
 
 	pdata rep_pdata;
@@ -72,9 +43,9 @@ int main(int argc, char* argv[]) {
 
 	sockaddr_in sin;
 
-	Arguments* args = new Arguments(argc, argv);
-
 	try {
+		Arguments* args = new Arguments(argc, argv);
+
 		//MAXBUFFERSIZE Byte buffer
 		uint32_t *buffer = (uint32_t *) malloc(
 				sizeof(uint32_t) * MAXBUFFERSIZE);
@@ -142,9 +113,9 @@ int main(int argc, char* argv[]) {
 			throw std::runtime_error("ibv_reg_mr failed!");
 		}
 
-		qp_attr.cap.max_send_wr = MAXPINGPONGTIME;
+		qp_attr.cap.max_send_wr = args->max_qp_wr;
 		qp_attr.cap.max_send_sge = 1;
-		qp_attr.cap.max_recv_wr = MAXPINGPONGTIME;
+		qp_attr.cap.max_recv_wr = args->max_qp_wr;
 		qp_attr.cap.max_recv_sge = 1;
 
 		qp_attr.send_cq = cq;
@@ -159,7 +130,7 @@ int main(int argc, char* argv[]) {
 		//prepare to receive from client ---- ping function
 		for (int i = 1; i <= args->max_packet_size; i++) {
 			sge.addr = (uintptr_t) (buffer);
-			sge.length = sizeof(uint32_t) * 1 * 1024 * i; // i MByte
+			sge.length = sizeof(uint32_t) * 1024 * 1024 * i; // i MByte
 			sge.length /= 4;
 			sge.lkey = mr->lkey;
 
@@ -189,7 +160,8 @@ int main(int argc, char* argv[]) {
 		}
 		rdma_ack_cm_event(event);
 
-		printf("Id:\tSize(KByte):\n");
+		int id = 0;
+		printf("Id:\tSize(MByte):\n");
 		for (int i = 1; i <= args->max_packet_size; i++) {
 			if (ibv_get_cq_event(comp_chan, &evt_cq, &cq_context)) {
 				throw std::runtime_error("ibv_get_cq_event failed!");
@@ -208,16 +180,17 @@ int main(int argc, char* argv[]) {
 			}
 
 			//cerr << "Receive: " << (int) ntohl(buffer[1]) << endl;
-			printf("%d\t%d\n", i, i);
+			printf("%d\t%d\n", id, i);
+			id++;
 
 			//sent to client ---- pong function
 			//buffer[0] = htonl(ntohl(buffer[1]));
 			sge.addr = (uintptr_t) (buffer);
-			sge.length = sizeof(uint32_t) * 1 * 1024 * i; // i MByte
+			sge.length = sizeof(uint32_t) * 1024 * 1024 * i; // i MByte
 			sge.length /= 4;
 			sge.lkey = mr->lkey;
 
-			send_wr.wr_id = i;
+			//send_wr.wr_id = i;
 			send_wr.opcode = IBV_WR_SEND;
 			send_wr.send_flags = IBV_SEND_SIGNALED;
 			send_wr.sg_list = &sge;
@@ -249,11 +222,15 @@ int main(int argc, char* argv[]) {
 		}
 
 		free(buffer);
+		rdma_dereg_mr(mr);
+		ibv_destroy_comp_channel(comp_chan);
+		ibv_destroy_cq(cq);
+		rdma_destroy_id(listen_id);
+		rdma_destroy_event_channel(cm_channel);
 	} catch (std::exception &e) {
 		cerr << "Exception: " << e.what() << endl;
 	}
 
-#endif
 	return 0;
 }
 
