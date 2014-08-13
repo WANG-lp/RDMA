@@ -1,7 +1,7 @@
 #eclipse
 *.project
 *.cproject
-
+*.settings
 
 # Object files
 *.o
