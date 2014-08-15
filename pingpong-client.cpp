@@ -1,6 +1,6 @@
 /*
  *
- * Usage: ./pingpong-client server-ip port MaxPacketSize(MByte)
+ * Usage: ./pingpong-client [-s 0/1 ] server-ip port MaxPacketSize(MByte)
  *
  */
 
@@ -70,7 +70,7 @@ int main(int argc, char* argv[]) {
 			throw std::runtime_error("rdma_create_id failed!");
 		}
 
-		if (getaddrinfo(argv[1], args->port, hints, &res)) {
+		if (getaddrinfo(args->hostip, args->port, hints, &res)) {
 			throw std::runtime_error("rdma_create_id failed!");
 		}
 		int err;
@@ -161,7 +161,7 @@ int main(int argc, char* argv[]) {
 		//prepare to receive from client ---- pong function
 		for (int i = 1; i <= args->max_packet_size; i++) {
 			sge.addr = (uintptr_t) (buffer);
-			sge.length = sizeof(uint32_t) * 1024 * 1024 * i; // i MByte
+			sge.length = sizeof(uint32_t) * args->size * i; // i MByte
 			sge.length /= 4;
 			sge.lkey = mr->lkey;
 
@@ -176,13 +176,14 @@ int main(int argc, char* argv[]) {
 		memset(buffer, 0x01, sizeof(buffer));
 
 		int id = 0;
-		printf("Id:\tSize(MByte):\tTime(ms):\tSpeed(Mbits/s):\n");
+		printf("Id:\tSize(%s):\tTime(ms):\tSpeed(Mbits/s):\n",
+				args->size_str.c_str());
 		for (int i = 1; i <= args->max_packet_size; i++) {
 
 			gettimeofday(&t_start, NULL);
 
 			sge.addr = (uintptr_t) (buffer);
-			sge.length = sizeof(uint32_t) * 1024 * 1024 * i; // i MByte
+			sge.length = sizeof(uint32_t) * args->size * i; // i MByte
 			sge.length /= 4;
 			sge.lkey = mr->lkey;
 
@@ -233,8 +234,13 @@ int main(int argc, char* argv[]) {
 			gettimeofday(&t_end, NULL);
 			float time_ms = ((t_end.tv_sec - t_start.tv_sec) * 1000 * 1000
 					+ t_end.tv_usec - t_start.tv_usec) / 1000.0;
-			printf("%d\t%d\t        %f\t%f\n", id, i, time_ms,
-					(i*8* 2) / (time_ms / 1000));
+
+			float speed = (i * 8 * 2) / (time_ms / 1000);
+			if (args->size_mode == 0) {
+				speed /= 1000;
+			} else if (args->size_mode == 1) {
+			}
+			printf("%d\t%d\t        %f\t%f\n", id, i, time_ms, speed);
 			id++;
 		}
 

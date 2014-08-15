@@ -3,6 +3,7 @@
 #include <stdexcept>
 #include <cstdint>
 #include <cstdlib>
+#include <string>
 
 class Arguments {
 public:
@@ -13,6 +14,9 @@ public:
 	char* hostip;
 	int max_mr_size;
 	int max_packet_size;
+	int size_mode;//0->Kbyte, 1-> Mbyte
+	std::string size_str;
+	int size;
 
 };
 
