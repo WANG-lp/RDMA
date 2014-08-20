@@ -1,6 +1,6 @@
 /*
  *
- * Usage: ./pingpong-server [-s 0/1 ] ip port MaxPacketSize(MByte)
+ * Usage: ./pingpong-server [-s 0/1 ] [-t num_threads] ip port MaxPacketSize(MByte)
  *
  */
 
@@ -47,7 +47,7 @@ uint32_t *buffer[MAXTHREADS];
 void work(int thread_id, Arguments *args) {
 
 	int id = 0;
-	printf("Thread:\tId:\tSize(%s):\n", args->size_str.c_str());
+
 	for (int i = 1; i <= args->max_packet_size; i++) {
 		if (ibv_get_cq_event(comp_chan[thread_id], &evt_cq[thread_id],
 				&cq_context[thread_id])) {
@@ -141,6 +141,8 @@ int main(int argc, char* argv[]) {
 		if (rdma_listen(listen_id, 1)) {
 			throw std::runtime_error("rdma_listen failed!");
 		}
+
+		printf("Thread:\tId:\tSize(%s):\n", args->size_str.c_str());
 
 		while (thread_id < args->num_threads) {
 			if (rdma_get_cm_event(cm_channel, &event)) {
