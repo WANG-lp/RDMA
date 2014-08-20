@@ -29,6 +29,8 @@ Arguments::Arguments(int argc, char* argv[]) {
 			switch (argv[i][1]) {
 			case 's':
 				this->size_mode = atoi(argv[++i]);
+				if(this->size_mode > 1)
+					throw std::runtime_error("-s error");
 				break;
 			case 't':
 				this->num_threads = atoi(argv[++i]);
