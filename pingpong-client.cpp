@@ -73,7 +73,7 @@ int main(int argc, char* argv[]) {
 		if (getaddrinfo(args->hostip, args->port, hints, &res)) {
 			throw std::runtime_error("rdma_create_id failed!");
 		}
-		int err;
+		int err = 0;
 		for (addrinfo* t = res; t; t = t->ai_next) {
 			err = rdma_resolve_addr(cm_id, NULL, t->ai_addr,
 			RESOLVE_TIMEOUT_MS);

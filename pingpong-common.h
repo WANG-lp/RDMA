@@ -16,6 +16,7 @@
 #include "Arguments.h"
 
 #define RESOLVE_TIMEOUT_MS	5000
+#define MAXTHREADS	64
 #define MAXBUFFERSIZE	(1024*1024*256) // 1GByte
 
 struct pdata {

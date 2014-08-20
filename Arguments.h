@@ -17,7 +17,7 @@ public:
 	int size_mode;//0->Kbyte, 1-> Mbyte
 	std::string size_str;
 	int size;
-
+	int num_threads;
 };
 
 #endif /* ARGUMENTS_H_ */

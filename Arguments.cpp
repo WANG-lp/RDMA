@@ -1,4 +1,5 @@
 #include "Arguments.h"
+#include "pingpong-common.h"
 
 Arguments::Arguments(int argc, char* argv[]) {
 	// TODO Auto-generated constructor stub
@@ -10,6 +11,7 @@ Arguments::Arguments(int argc, char* argv[]) {
 	this->size_mode = 0;
 	this->size_str = "KByte";
 	this->size = 1024;
+	this->num_threads = 1;
 
 	int i = 1;
 	while (i < argc) {
@@ -27,6 +29,11 @@ Arguments::Arguments(int argc, char* argv[]) {
 			switch (argv[i][1]) {
 			case 's':
 				this->size_mode = atoi(argv[++i]);
+				break;
+			case 't':
+				this->num_threads = atoi(argv[++i]);
+				if(this->num_threads > MAXTHREADS)
+					this->num_threads = MAXTHREADS;
 				break;
 			default:
 				fprintf(stderr, "Invalid option %s\n", argv[i]);

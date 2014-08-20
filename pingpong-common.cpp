@@ -26,7 +26,7 @@ void query_device(Arguments* args) {
 	}
 
 	printf("There are %d devices!\n", device_num);
-	printf("The device '%s' max mr size is %u bytes.\n",
+	printf("The device '%s' max mr size is %llu bytes.\n",
 			ibv_get_device_name(ctx->device), device_attr.max_mr_size);
 	printf("The device '%s' max_qp_wr is %u.\n",
 			ibv_get_device_name(ctx->device), device_attr.max_qp_wr);

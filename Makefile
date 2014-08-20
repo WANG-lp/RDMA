@@ -1,7 +1,7 @@
 
 all: pingpong-server pingpong-client
 
-CXXFLAGS += -O3 -std=c++0x
+CXXFLAGS += -O3 -std=c++0x -Wall
 
 LIBS += -lrdmacm -libverbs -lrt
 
