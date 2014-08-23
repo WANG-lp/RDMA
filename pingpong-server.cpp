@@ -48,65 +48,67 @@ void work(int thread_id, Arguments *args) {
 
 	int id = 0;
 
-	for (int i = 1; i <= args->max_packet_size; i++) {
-		if (ibv_get_cq_event(comp_chan[thread_id], &evt_cq[thread_id],
-				&cq_context[thread_id])) {
-			throw std::runtime_error("ibv_get_cq_event failed!");
+	for (int j = 0; j < args->loop; j++) {
+		for (int i = args->min_packet_size; i <= args->max_packet_size; i++) {
+			if (ibv_get_cq_event(comp_chan[thread_id], &evt_cq[thread_id],
+					&cq_context[thread_id])) {
+				throw std::runtime_error("ibv_get_cq_event failed!");
+			}
+
+			if (ibv_req_notify_cq(cq[thread_id], 0)) {
+				throw std::runtime_error("ibv_req_notify_cq failed!");
+			}
+
+			if (ibv_poll_cq(cq[thread_id], 1, &wc[thread_id]) < 1) {
+				throw std::runtime_error("ibv_poll_cq failed!");
+			}
+
+			if (wc[thread_id].status != IBV_WC_SUCCESS) {
+				throw std::runtime_error("IBV_WC_SUCCESS failed!");
+			}
+
+			//cerr << "Receive: " << (int) ntohl(buffer[1]) << endl;
+			printf("%d\t%d\t%d\n", thread_id, id, i);
+			id++;
+
+			//sent to client ---- pong function
+			//buffer[0] = htonl(ntohl(buffer[1]));
+			sge[thread_id].addr = (uintptr_t) (buffer[thread_id]);
+			sge[thread_id].length = sizeof(uint32_t) * args->size * i; // i MByte
+			sge[thread_id].length /= 4;
+			sge[thread_id].lkey = mr[thread_id]->lkey;
+
+			//send_wr.wr_id = i;
+			send_wr[thread_id].opcode = IBV_WR_SEND;
+			send_wr[thread_id].send_flags = IBV_SEND_SIGNALED;
+			send_wr[thread_id].sg_list = &sge[thread_id];
+			send_wr[thread_id].num_sge = 1;
+
+			if (ibv_post_send(cm_id[thread_id]->qp, &send_wr[thread_id],
+					&bad_send_wr[thread_id])) {
+				throw std::runtime_error("ibv_post_send failed!");
+			}
+
+			/* Wait for send completion */
+
+			if (ibv_get_cq_event(comp_chan[thread_id], &evt_cq[thread_id],
+					&cq_context[thread_id])) {
+				throw std::runtime_error("ibv_get_cq_event failed!");
+			}
+
+			if (ibv_req_notify_cq(cq[thread_id], 0)) {
+				throw std::runtime_error("ibv_req_notify_cq failed!");
+			}
+
+			if (ibv_poll_cq(cq[thread_id], 1, &wc[thread_id]) < 1) {
+				throw std::runtime_error("ibv_poll_cq failed!");
+			}
+
+			if (wc[thread_id].status != IBV_WC_SUCCESS) {
+				throw std::runtime_error("IBV_WC_SUCCESS 2 failed!");
+			}
+			ibv_ack_cq_events(cq[thread_id], 2);
 		}
-
-		if (ibv_req_notify_cq(cq[thread_id], 0)) {
-			throw std::runtime_error("ibv_req_notify_cq failed!");
-		}
-
-		if (ibv_poll_cq(cq[thread_id], 1, &wc[thread_id]) < 1) {
-			throw std::runtime_error("ibv_poll_cq failed!");
-		}
-
-		if (wc[thread_id].status != IBV_WC_SUCCESS) {
-			throw std::runtime_error("IBV_WC_SUCCESS failed!");
-		}
-
-		//cerr << "Receive: " << (int) ntohl(buffer[1]) << endl;
-		printf("%d\t%d\t%d\n", thread_id, id, i);
-		id++;
-
-		//sent to client ---- pong function
-		//buffer[0] = htonl(ntohl(buffer[1]));
-		sge[thread_id].addr = (uintptr_t) (buffer[thread_id]);
-		sge[thread_id].length = sizeof(uint32_t) * args->size * i; // i MByte
-		sge[thread_id].length /= 4;
-		sge[thread_id].lkey = mr[thread_id]->lkey;
-
-		//send_wr.wr_id = i;
-		send_wr[thread_id].opcode = IBV_WR_SEND;
-		send_wr[thread_id].send_flags = IBV_SEND_SIGNALED;
-		send_wr[thread_id].sg_list = &sge[thread_id];
-		send_wr[thread_id].num_sge = 1;
-
-		if (ibv_post_send(cm_id[thread_id]->qp, &send_wr[thread_id],
-				&bad_send_wr[thread_id])) {
-			throw std::runtime_error("ibv_post_send failed!");
-		}
-
-		/* Wait for send completion */
-
-		if (ibv_get_cq_event(comp_chan[thread_id], &evt_cq[thread_id],
-				&cq_context[thread_id])) {
-			throw std::runtime_error("ibv_get_cq_event failed!");
-		}
-
-		if (ibv_req_notify_cq(cq[thread_id], 0)) {
-			throw std::runtime_error("ibv_req_notify_cq failed!");
-		}
-
-		if (ibv_poll_cq(cq[thread_id], 1, &wc[thread_id]) < 1) {
-			throw std::runtime_error("ibv_poll_cq failed!");
-		}
-
-		if (wc[thread_id].status != IBV_WC_SUCCESS) {
-			throw std::runtime_error("IBV_WC_SUCCESS 2 failed!");
-		}
-		ibv_ack_cq_events(cq[thread_id], 2);
 	}
 }
 
@@ -206,18 +208,22 @@ int main(int argc, char* argv[]) {
 
 				//TODO: why here?
 				//prepare to receive from client ---- ping function
-				for (int i = 1; i <= args->max_packet_size; i++) {
-					sge[thread_id].addr = (uintptr_t) (buffer[thread_id]);
-					sge[thread_id].length = sizeof(uint32_t) * args->size * i; // i MByte
-					sge[thread_id].length /= 4;
-					sge[thread_id].lkey = mr[thread_id]->lkey;
+				for (int j = 0; j < args->loop; j++) {
+					for (int i = args->min_packet_size;
+							i <= args->max_packet_size; i++) {
+						sge[thread_id].addr = (uintptr_t) (buffer[thread_id]);
+						sge[thread_id].length = sizeof(uint32_t) * args->size
+								* i; // i MByte
+						sge[thread_id].length /= 4;
+						sge[thread_id].lkey = mr[thread_id]->lkey;
 
-					recv_wr[thread_id].sg_list = &sge[thread_id];
-					recv_wr[thread_id].num_sge = 1;
+						recv_wr[thread_id].sg_list = &sge[thread_id];
+						recv_wr[thread_id].num_sge = 1;
 
-					if (ibv_post_recv(cm_id[thread_id]->qp, &recv_wr[thread_id],
-							&bad_recv_wr[thread_id])) {
-						throw std::runtime_error("ibv_post_recv failed!");
+						if (ibv_post_recv(cm_id[thread_id]->qp,
+								&recv_wr[thread_id], &bad_recv_wr[thread_id])) {
+							throw std::runtime_error("ibv_post_recv failed!");
+						}
 					}
 				}
 

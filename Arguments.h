@@ -13,11 +13,16 @@ public:
 	char* port;
 	char* hostip;
 	int max_mr_size;
+	int min_packet_size;
 	int max_packet_size;
 	int size_mode;//0->Kbyte, 1-> Mbyte
 	std::string size_str;
 	int size;
 	int num_threads;
+	int loop;
+
+private:
+	void printUsage();
 };
 
 #endif /* ARGUMENTS_H_ */
